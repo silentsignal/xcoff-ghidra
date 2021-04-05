@@ -10,8 +10,6 @@ from ghidra.program.model.symbol import SourceType
 
 f=getFirstFunction()
 
-
-secondChance=False
 while f is not None:
     print(f)
     nextF=getFunctionAfter(f)
