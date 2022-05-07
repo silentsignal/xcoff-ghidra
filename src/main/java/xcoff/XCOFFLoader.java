@@ -45,70 +45,137 @@ import ghidra.program.model.symbol.Reference;
 import ghidra.util.exception.CancelledException;
 import ghidra.util.task.TaskMonitor;
 import io.kaitai.struct.ByteBufferKaitaiStream;
-import xcoff.Xcoff32.SectionHeader;
+import xcoff.Xcoff32;
+import xcoff.Xcoff64;
 
 /**
  * TODO: Provide class-level documentation that describes what this loader does.
  */
 public class XCOFFLoader extends AbstractLibrarySupportLoader {
-
+    private boolean is64=false;
 	@Override
 	public String getName() {
 		return "XCOFF loader";
 	}
 
-	@Override
-	public Collection<LoadSpec> findSupportedLoadSpecs(ByteProvider provider) throws IOException {
-		List<LoadSpec> loadSpecs = new ArrayList<>();
+    @Override
+    public Collection<LoadSpec> findSupportedLoadSpecs(ByteProvider provider) throws IOException {
+        List<LoadSpec> loadSpecs = new ArrayList<>();
 
-		// TODO: Examine the bytes in 'provider' to determine if this loader can load it.  If it 
-		// can load it, return the appropriate load specifications.
-		BinaryReader reader = new BinaryReader(provider, false/*always big endian*/);
-		if (XCoffFileHeaderMagic.isMatch(reader.peekNextShort())) {
-			loadSpecs.add(new LoadSpec(this, 0x400000, new LanguageCompilerSpecPair("PowerPC:BE:32:default", "default"),true));
-		}
-		return loadSpecs;
-	}
+        // TODO: Examine the bytes in 'provider' to determine if this loader can load it.  If it 
+        // can load it, return the appropriate load specifications.
+        BinaryReader reader = new BinaryReader(provider, false/*always big endian*/);
+        short magic = reader.peekNextShort();
+        if (XCoffFileHeaderMagic.MAGIC_XCOFF32 == magic) {
+            loadSpecs.add(new LoadSpec(this, 0x400000, new LanguageCompilerSpecPair("PowerPC:BE:32:default", "default"),true));
+        }
+        if (XCoffFileHeaderMagic.MAGIC_XCOFF64 == magic) {
+            loadSpecs.add(new LoadSpec(this, 0x400000, new LanguageCompilerSpecPair("PowerPC:BE:64:default", "default"),true));
+            is64=true;
+        }
+        return loadSpecs;
+    }
 
+    /*
+     * The layout of 32- and 64-bit formats differ, so although we have really similar high-level
+     * structures (e.g. SectionHeader's), it makes sense not to have a common interface, but have 
+     * duplicate implementations of the same loading algorithms, that may divert in the future, as
+     * more details affected by differing data structure are implemented.
+     * */
 	@Override
 	protected void load(ByteProvider provider, LoadSpec loadSpec, List<Option> options,
 			Program program, TaskMonitor monitor, MessageLog log)
 			throws CancelledException, IOException {
-		
-		Xcoff32 xcoff = new Xcoff32(new ByteBufferKaitaiStream(provider.readBytes(0, provider.length())));
-		AddressFactory af = program.getAddressFactory();
-		for (SectionHeader sectionHeader : xcoff.sectionHeaders()) {
-			Address start = af.getDefaultAddressSpace().getAddress( sectionHeader.sVaddr() );
-			try {
-				if (sectionHeader.sFlags() != 0x80) {
-					MemoryBlockUtils.createInitializedBlock(program, false, sectionHeader.sName(), start,new ByteArrayInputStream(sectionHeader.body()), sectionHeader.sSize(), "", sectionHeader.sName(), true, true, true, log, monitor);
-				}else {
-					MemoryBlockUtils.createUninitializedBlock(program, false, sectionHeader.sName(), start, sectionHeader.sSize(), "", "", true, true, true, log);
-				}
-			} catch (AddressOverflowException e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
-			}
-		}
-		Address entry_struct_address = af.getDefaultAddressSpace().getAddress(xcoff.auxiliaryHeader().oEntry());
-		FlatProgramAPI api= new FlatProgramAPI(program);
-		try {
-			api.createData(entry_struct_address,new PointerDataType());
-			for (Reference ref:api.getReferencesFrom(entry_struct_address)) {
-				api.createFunction(ref.getToAddress(),"___start");
-			}
-		} catch (Exception e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		}
-		
-		
-		
+	    
+	    if (is64) { // 64-bit
+	        load64bit(provider, loadSpec,options,program,monitor,log);
+	    }else {
+	        load32bit(provider, loadSpec,options,program,monitor,log);
+	    }
 		
 		// TODO: Load the bytes from 'provider' into the 'program'.
 	}
 
-	@Override
+	private void load32bit(ByteProvider provider, LoadSpec loadSpec, List<Option> options, Program program,
+            TaskMonitor monitor, MessageLog log) throws IOException{
+	    Xcoff32 xcoff = new Xcoff32(new ByteBufferKaitaiStream(provider.readBytes(0, provider.length())));
+        AddressFactory af = program.getAddressFactory();
+        for (Xcoff32.SectionHeader sectionHeader : xcoff.sectionHeaders()) {
+            Address start = af.getDefaultAddressSpace().getAddress( sectionHeader.sVaddr() );
+            try {
+                if (sectionHeader.sFlags() != 0x80) {
+                    MemoryBlockUtils.createInitializedBlock(program, false, sectionHeader.sName(), start,new ByteArrayInputStream(sectionHeader.body()), sectionHeader.sSize(), "", sectionHeader.sName(), true, true, true, log, monitor);
+                }else {
+                    MemoryBlockUtils.createUninitializedBlock(program, false, sectionHeader.sName(), start, sectionHeader.sSize(), "", "", true, true, true, log);
+                }
+            } catch (AddressOverflowException e) {
+                // TODO Auto-generated catch block
+                e.printStackTrace();
+            }
+        }
+        Address entry_struct_address = af.getDefaultAddressSpace().getAddress(xcoff.auxiliaryHeader().oEntry());
+        FlatProgramAPI api= new FlatProgramAPI(program);
+        try {
+            api.createData(entry_struct_address,new PointerDataType());
+            for (Reference ref:api.getReferencesFrom(entry_struct_address)) {
+                api.createFunction(ref.getToAddress(),"___start");
+            }
+        } catch (Exception e) {
+            // TODO Auto-generated catch block
+            e.printStackTrace();
+        }
+        
+    }
+
+    private void load64bit(ByteProvider provider, LoadSpec loadSpec, List<Option> options, Program program,
+            TaskMonitor monitor, MessageLog log) throws IOException {
+        Xcoff64 xcoff = new Xcoff64(new ByteBufferKaitaiStream(provider.readBytes(0, provider.length())));
+        AddressFactory af = program.getAddressFactory();
+        FlatProgramAPI api= new FlatProgramAPI(program);
+        for (Xcoff64.SectionHeader sectionHeader : xcoff.sectionHeaders()) {
+            Address start = af.getDefaultAddressSpace().getAddress( sectionHeader.sVaddr() );
+            try {
+                if (sectionHeader.sFlags() != 0x80) {
+                    MemoryBlockUtils.createInitializedBlock(program, false, sectionHeader.sName(), start,new ByteArrayInputStream(sectionHeader.body()), sectionHeader.sSize(), "", sectionHeader.sName(), true, true, true, log, monitor);
+                    if (sectionHeader.subsection() instanceof Xcoff64.LoaderSection) {
+                        Xcoff64.LoaderSection loader = (Xcoff64.LoaderSection)sectionHeader.subsection();
+                        Xcoff64.SymbolTable symTable= loader.lSymbolTable();
+                        for (Xcoff64.SymbolEntry se: symTable.symbolEntries()) {
+                            long symPos= se.lValue();
+                            String symName= se.lNameptr().lStrname();
+                            if (se.lSmtype().symEntrypoint()) {
+                                api.createLabel(af.getDefaultAddressSpace().getAddress(symPos), symName, true);
+                            }else if(se.lSmtype().symImported()) {
+                                // TODO
+                            }else {
+                                // TODO
+                            }
+                        }
+                    }
+                }else {
+                    MemoryBlockUtils.createUninitializedBlock(program, false, sectionHeader.sName(), start, sectionHeader.sSize(), "", "", true, true, true, log);
+                }
+            } catch (Exception e) {
+                // TODO Auto-generated catch block
+                e.printStackTrace();
+            }
+        }
+        Address entry_struct_address = af.getDefaultAddressSpace().getAddress(xcoff.auxiliaryHeader().oEntry());
+        
+        try {
+            api.createData(entry_struct_address,new PointerDataType());
+            for (Reference ref:api.getReferencesFrom(entry_struct_address)) {
+                api.createFunction(ref.getToAddress(),"___start");
+            }
+            
+        } catch (Exception e) {
+            // TODO Auto-generated catch block
+            e.printStackTrace();
+        }
+        
+    }
+
+    @Override
 	public List<Option> getDefaultOptions(ByteProvider provider, LoadSpec loadSpec,
 			DomainObject domainObject, boolean isLoadIntoProgram) {
 		List<Option> list =
