@@ -100,21 +100,38 @@ public class XCOFFLoader extends AbstractLibrarySupportLoader {
             TaskMonitor monitor, MessageLog log) throws IOException{
 	    Xcoff32 xcoff = new Xcoff32(new ByteBufferKaitaiStream(provider.readBytes(0, provider.length())));
         AddressFactory af = program.getAddressFactory();
+        FlatProgramAPI api= new FlatProgramAPI(program);
         for (Xcoff32.SectionHeader sectionHeader : xcoff.sectionHeaders()) {
             Address start = af.getDefaultAddressSpace().getAddress( sectionHeader.sVaddr() );
             try {
                 if (sectionHeader.sFlags() != 0x80) {
                     MemoryBlockUtils.createInitializedBlock(program, false, sectionHeader.sName(), start,new ByteArrayInputStream(sectionHeader.body()), sectionHeader.sSize(), "", sectionHeader.sName(), true, true, true, log, monitor);
+                    if (sectionHeader.subsection() instanceof Xcoff64.LoaderSection) {
+                        Xcoff32.LoaderSection loader = (Xcoff32.LoaderSection)sectionHeader.subsection();
+                        Xcoff32.SymbolTable symTable= loader.symbolTable(); 
+                        for (Xcoff32.SymbolEntry se: symTable.symbolEntries()) {
+                            long symPos= se.lValue();
+                            String symName = null;
+                            if (se.nameStructure().lStrname() != null) { // untested!
+                                symName=se.nameStructure().lStrname();
+                            }else if (se.nameStructure().lName() != null) {
+                                symName=se.nameStructure().lName();
+                            }
+                            if (symPos != 0 && symName != null) {
+                                api.createLabel(af.getDefaultAddressSpace().getAddress(symPos), symName, true);
+                            }
+                        }
+                    }
                 }else {
                     MemoryBlockUtils.createUninitializedBlock(program, false, sectionHeader.sName(), start, sectionHeader.sSize(), "", "", true, true, true, log);
                 }
-            } catch (AddressOverflowException e) {
+            } catch (Exception e) {
                 // TODO Auto-generated catch block
                 e.printStackTrace();
             }
         }
         Address entry_struct_address = af.getDefaultAddressSpace().getAddress(xcoff.auxiliaryHeader().oEntry());
-        FlatProgramAPI api= new FlatProgramAPI(program);
+        
         try {
             api.createData(entry_struct_address,new PointerDataType());
             for (Reference ref:api.getReferencesFrom(entry_struct_address)) {
@@ -143,12 +160,8 @@ public class XCOFFLoader extends AbstractLibrarySupportLoader {
                         for (Xcoff64.SymbolEntry se: symTable.symbolEntries()) {
                             long symPos= se.lValue();
                             String symName= se.lNameptr().lStrname();
-                            if (se.lSmtype().symEntrypoint()) {
+                            if (symPos != 0) {
                                 api.createLabel(af.getDefaultAddressSpace().getAddress(symPos), symName, true);
-                            }else if(se.lSmtype().symImported()) {
-                                // TODO
-                            }else {
-                                // TODO
                             }
                         }
                     }
