@@ -7,6 +7,5 @@ TODO
 ----
 
 * Implement missing substructures (see the KS repo)
-* 64-bit support
 * Proper registration of import/export symbols in Ghidra
 
