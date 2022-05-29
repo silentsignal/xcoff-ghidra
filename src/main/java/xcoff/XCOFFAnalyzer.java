@@ -15,18 +15,22 @@
  */
 package xcoff;
 
+import java.math.BigInteger;
 import java.util.Arrays;
 
 import ghidra.app.services.AbstractAnalyzer;
 import ghidra.app.services.AnalyzerType;
 import ghidra.app.util.importer.MessageLog;
 import ghidra.framework.options.Options;
+import ghidra.program.model.address.Address;
 import ghidra.program.model.address.AddressOutOfBoundsException;
 import ghidra.program.model.address.AddressSetView;
 import ghidra.program.model.lang.Language;
 import ghidra.program.model.lang.Processor;
+import ghidra.program.model.lang.RegisterValue;
 import ghidra.program.model.listing.FunctionIterator;
 import ghidra.program.model.listing.Program;
+import ghidra.program.model.listing.ProgramContext;
 import ghidra.program.model.mem.Memory;
 import ghidra.program.model.mem.MemoryAccessException;
 import ghidra.program.model.symbol.SourceType;
@@ -36,16 +40,18 @@ import ghidra.util.exception.InvalidInputException;
 import ghidra.util.task.TaskMonitor;
 import io.kaitai.struct.ByteBufferKaitaiStream;
 import io.kaitai.struct.KaitaiStream.ValidationNotEqualError;
+import ghidra.program.model.listing.ContextChangeException;
 import ghidra.program.model.listing.Function;
 
 /**
  Special thanks to ohmantics:
  https://www.reddit.com/r/ghidra/comments/mldyv5/adding_xcoff_support_to_ghidra_with_kaitai_struct/gtm5s8s
  */
-public class TracebackTableAnalyzer extends AbstractAnalyzer {
+public class XCOFFAnalyzer extends AbstractAnalyzer {
 
-	public TracebackTableAnalyzer() {
-		super("Traceback Table Analyzer", "Parses PowerPC Traceback table information", AnalyzerType.FUNCTION_ANALYZER);
+	public XCOFFAnalyzer() {
+		super("XCOFF Analyzer", "Parses functions defined in XCOFF files", AnalyzerType.FUNCTION_ANALYZER);
+		this.setSupportsOneTimeAnalysis(true);
 	}
 
 	@Override
@@ -78,12 +84,20 @@ public class TracebackTableAnalyzer extends AbstractAnalyzer {
 	@Override
 	public boolean added(Program program, AddressSetView set, TaskMonitor monitor, MessageLog log)
 			throws CancelledException {
-
+	    
+	    Address toc = program.getUsrPropertyManager().getVoidPropertyMap("TOC").getFirstPropertyAddress();
+	    ProgramContext programContext = program.getProgramContext();
+	    RegisterValue r2Value = new RegisterValue(programContext.getRegister("r2"), BigInteger.valueOf(toc.getOffset())); 
+	    
 		FunctionIterator functions = program.getListing().getFunctions(set, true);
 		while(functions.hasNext()) {
 			Function f=functions.next();
 			byte[] bytes=new byte[128]; // Ought to be enough for any function name... 
 			try {
+			    // Set TOC pointer
+			    programContext.setRegisterValue(f.getBody().getMinAddress(), f.getBody().getMaxAddress(), r2Value);
+			    
+			    // Parse Traceback table
 				program.getMemory().getBytes(f.getBody().getMaxAddress().add(1), bytes);
 				try {
 					TracebackTable tb=new TracebackTable(new ByteBufferKaitaiStream(bytes));
@@ -97,12 +111,14 @@ public class TracebackTableAnalyzer extends AbstractAnalyzer {
 				}catch(DuplicateNameException dne) {
 					
 				}
-			} catch (MemoryAccessException | AddressOutOfBoundsException e) {
+			} catch (MemoryAccessException | AddressOutOfBoundsException | ContextChangeException e) {
 				// TODO Auto-generated catch block
 				e.printStackTrace();
+				return false;
 			}
 
 		}
-		return false;
+		return true;
 	}
+
 }

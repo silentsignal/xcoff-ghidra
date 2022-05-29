@@ -18,6 +18,7 @@ import ghidra.app.util.bin.format.xcoff.*;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.math.BigInteger;
 import java.util.*;
 
 import ghidra.program.flatapi.FlatProgramAPI;
@@ -39,10 +40,15 @@ import ghidra.program.model.data.DataUtilities;
 import ghidra.program.model.data.Pointer;
 import ghidra.program.model.data.PointerDataType;
 import ghidra.program.model.lang.LanguageCompilerSpecPair;
+import ghidra.program.model.lang.RegisterValue;
 import ghidra.program.model.listing.Data;
 import ghidra.program.model.listing.Program;
+import ghidra.program.model.listing.ProgramContext;
 import ghidra.program.model.symbol.Reference;
+import ghidra.program.model.util.LongPropertyMap;
+import ghidra.program.model.util.VoidPropertyMap;
 import ghidra.util.exception.CancelledException;
+import ghidra.util.exception.DuplicateNameException;
 import ghidra.util.task.TaskMonitor;
 import io.kaitai.struct.ByteBufferKaitaiStream;
 import xcoff.Xcoff32;
@@ -101,6 +107,16 @@ public class XCOFFLoader extends AbstractLibrarySupportLoader {
 	    Xcoff32 xcoff = new Xcoff32(new ByteBufferKaitaiStream(provider.readBytes(0, provider.length())));
         AddressFactory af = program.getAddressFactory();
         FlatProgramAPI api= new FlatProgramAPI(program);
+        
+        // Set TOC information for the analyzer
+        VoidPropertyMap tocPropertyMap;
+        try {
+            tocPropertyMap = program.getUsrPropertyManager().createVoidPropertyMap("TOC");
+            Address tocAddr = api.toAddr(xcoff.auxiliaryHeader().oToc());
+            tocPropertyMap.add(tocAddr);
+        } catch (DuplicateNameException e1) {}
+        
+        
         for (Xcoff32.SectionHeader sectionHeader : xcoff.sectionHeaders()) {
             Address start = af.getDefaultAddressSpace().getAddress( sectionHeader.sVaddr() );
             try {
@@ -122,6 +138,7 @@ public class XCOFFLoader extends AbstractLibrarySupportLoader {
                             }
                         }
                     }
+                   
                 }else {
                     MemoryBlockUtils.createUninitializedBlock(program, false, sectionHeader.sName(), start, sectionHeader.sSize(), "", "", true, true, true, log);
                 }
@@ -149,6 +166,15 @@ public class XCOFFLoader extends AbstractLibrarySupportLoader {
         Xcoff64 xcoff = new Xcoff64(new ByteBufferKaitaiStream(provider.readBytes(0, provider.length())));
         AddressFactory af = program.getAddressFactory();
         FlatProgramAPI api= new FlatProgramAPI(program);
+        
+        // Set TOC information for the analyzer
+        VoidPropertyMap tocPropertyMap;
+        try {
+            tocPropertyMap = program.getUsrPropertyManager().createVoidPropertyMap("TOC");
+            Address tocAddr = api.toAddr(xcoff.auxiliaryHeader().oToc());
+            tocPropertyMap.add(tocAddr);
+        } catch (DuplicateNameException e1) {}
+        
         for (Xcoff64.SectionHeader sectionHeader : xcoff.sectionHeaders()) {
             Address start = af.getDefaultAddressSpace().getAddress( sectionHeader.sVaddr() );
             try {
@@ -168,6 +194,7 @@ public class XCOFFLoader extends AbstractLibrarySupportLoader {
                 }else {
                     MemoryBlockUtils.createUninitializedBlock(program, false, sectionHeader.sName(), start, sectionHeader.sSize(), "", "", true, true, true, log);
                 }
+                                
             } catch (Exception e) {
                 // TODO Auto-generated catch block
                 e.printStackTrace();
