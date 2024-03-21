@@ -37,7 +37,8 @@ repositories{
 }
 
 dependencies{
-    compileClasspath 'io.kaitai:kaitai-struct-runtime:0.9@jar'
+    // https://mvnrepository.com/artifact/io.kaitai/kaitai-struct-runtime
+    implementation 'io.kaitai:kaitai-struct-runtime:0.9'
 }
 
 task copyLibs(type: Copy, ) {
@@ -46,4 +47,6 @@ task copyLibs(type: Copy, ) {
     include "kaitai*"
 }
 
-buildExtension.dependsOn copyLibs
+// buildExtension.dependsOn copyLibs
+
+buildExtension
