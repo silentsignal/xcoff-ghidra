@@ -28,6 +28,7 @@ import ghidra.app.util.bin.format.xcoff.XCoffFileHeaderMagic;
 import ghidra.app.util.importer.MessageLog;
 import ghidra.app.util.opinion.AbstractLibrarySupportLoader;
 import ghidra.app.util.opinion.LoadSpec;
+import ghidra.app.util.opinion.Loader.ImporterSettings;
 import ghidra.framework.model.DomainObject;
 import ghidra.program.model.address.Address;
 import ghidra.program.model.address.AddressFactory;
@@ -79,14 +80,13 @@ public class XCOFFLoader extends AbstractLibrarySupportLoader {
      * more details affected by differing data structure are implemented.
      * */
 	@Override
-	protected void load(ByteProvider provider, LoadSpec loadSpec, List<Option> options,
-			Program program, TaskMonitor monitor, MessageLog log)
+	protected void load(Program program, ImporterSettings settings)
 			throws CancelledException, IOException {
 	    
 	    if (is64) { // 64-bit
-	        load64bit(provider, loadSpec,options,program,monitor,log);
+	        load64bit(settings.provider(), settings.loadSpec(),settings.options(),program,settings.monitor(),settings.log());
 	    }else {
-	        load32bit(provider, loadSpec,options,program,monitor,log);
+	        load32bit(settings.provider(), settings.loadSpec(),settings.options(),program,settings.monitor(),settings.log());
 	    }
 		
 		// TODO: Load the bytes from 'provider' into the 'program'.
@@ -219,12 +219,12 @@ public class XCOFFLoader extends AbstractLibrarySupportLoader {
 
     @Override
 	public List<Option> getDefaultOptions(ByteProvider provider, LoadSpec loadSpec,
-			DomainObject domainObject, boolean isLoadIntoProgram) {
+			DomainObject domainObject, boolean isLoadIntoProgram, boolean mirrorFsLayout) {
 		List<Option> list =
-			super.getDefaultOptions(provider, loadSpec, domainObject, isLoadIntoProgram);
+			super.getDefaultOptions(provider, loadSpec, domainObject, isLoadIntoProgram, mirrorFsLayout);
 
 		// TODO: If this loader has custom options, add them to 'list'
-		list.add(new Option("Option name goes here", "Default option value goes here"));
+		// list.add(new Option("Option name goes here", "Default option value goes here"));
 
 		return list;
 	}
