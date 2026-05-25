@@ -55,7 +55,7 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: xcoff-ghidra_Ghidra_${{ matrix.ghidra }}
-        path: xcoff-ghidra/dist/*.zip
+        path: xcoff-ghidra/xcoff-ghidra/dist/*.zip
         
   release:
     runs-on: "ubuntu-latest"
