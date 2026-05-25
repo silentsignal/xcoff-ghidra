@@ -14,11 +14,9 @@
  * limitations under the License.
  */
 package xcoff;
-import ghidra.app.util.bin.format.xcoff.*;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
-import java.math.BigInteger;
 import java.util.*;
 
 import ghidra.program.flatapi.FlatProgramAPI;
@@ -30,22 +28,14 @@ import ghidra.app.util.bin.format.xcoff.XCoffFileHeaderMagic;
 import ghidra.app.util.importer.MessageLog;
 import ghidra.app.util.opinion.AbstractLibrarySupportLoader;
 import ghidra.app.util.opinion.LoadSpec;
-import ghidra.app.util.opinion.QueryOpinionService;
-import ghidra.app.util.opinion.QueryResult;
 import ghidra.framework.model.DomainObject;
 import ghidra.program.model.address.Address;
 import ghidra.program.model.address.AddressFactory;
-import ghidra.program.model.address.AddressOverflowException;
-import ghidra.program.model.data.DataUtilities;
-import ghidra.program.model.data.Pointer;
 import ghidra.program.model.data.PointerDataType;
 import ghidra.program.model.lang.LanguageCompilerSpecPair;
-import ghidra.program.model.lang.RegisterValue;
-import ghidra.program.model.listing.Data;
 import ghidra.program.model.listing.Program;
-import ghidra.program.model.listing.ProgramContext;
 import ghidra.program.model.symbol.Reference;
-import ghidra.program.model.util.LongPropertyMap;
+import ghidra.program.model.symbol.SourceType;
 import ghidra.program.model.util.VoidPropertyMap;
 import ghidra.util.exception.CancelledException;
 import ghidra.util.exception.DuplicateNameException;
@@ -110,12 +100,18 @@ public class XCOFFLoader extends AbstractLibrarySupportLoader {
         
         // Set TOC information for the analyzer
         VoidPropertyMap tocPropertyMap;
+        Address tocAddr = api.toAddr(xcoff.auxiliaryHeader().oToc());
         try {
             tocPropertyMap = program.getUsrPropertyManager().createVoidPropertyMap("TOC");
-            Address tocAddr = api.toAddr(xcoff.auxiliaryHeader().oToc());
             tocPropertyMap.add(tocAddr);
         } catch (DuplicateNameException e1) {}
         
+        try {
+            api.createLabel(tocAddr, "TOC", true, SourceType.USER_DEFINED);
+        } catch (Exception e1) {
+            // TODO Auto-generated catch block
+            e1.printStackTrace();
+        }
         
         for (Xcoff32.SectionHeader sectionHeader : xcoff.sectionHeaders()) {
             Address start = af.getDefaultAddressSpace().getAddress( sectionHeader.sVaddr() );
@@ -169,11 +165,17 @@ public class XCOFFLoader extends AbstractLibrarySupportLoader {
         
         // Set TOC information for the analyzer
         VoidPropertyMap tocPropertyMap;
+        Address tocAddr = api.toAddr(xcoff.auxiliaryHeader().oToc());
         try {
             tocPropertyMap = program.getUsrPropertyManager().createVoidPropertyMap("TOC");
-            Address tocAddr = api.toAddr(xcoff.auxiliaryHeader().oToc());
             tocPropertyMap.add(tocAddr);
         } catch (DuplicateNameException e1) {}
+        try {
+            api.createLabel(tocAddr, "TOC", true, SourceType.USER_DEFINED);
+        } catch (Exception e1) {
+            // TODO Auto-generated catch block
+            e1.printStackTrace();
+        }
         
         for (Xcoff64.SectionHeader sectionHeader : xcoff.sectionHeaders()) {
             Address start = af.getDefaultAddressSpace().getAddress( sectionHeader.sVaddr() );
